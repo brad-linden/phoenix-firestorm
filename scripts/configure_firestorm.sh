@@ -353,7 +353,7 @@ then
     fi
 
     echo "Setting environment variables for Visual Studio..."
-    if [ "$OSTYPE" = "cygwin" ] ; then
+    if [[ "$OSTYPE" =~ "cygwin|msys" ]] ; then
         export AUTOBUILD_EXEC="$(cygpath -u $AUTOBUILD)"
     fi
     if [ -z "$AUTOBUILD_EXEC" ]

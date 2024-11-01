@@ -16,7 +16,7 @@ on:
     - cron: '00 03 * * *' # Run every day at 3am UTC
 env:
   AUTOBUILD_VARIABLES_FILE: ${{github.workspace}}/build-variables/variables
-  EXTRA_ARGS: -DUSE_FMODSTUDIO=ON -DUSE_KDU=ON --crashreporting
+  # EXTRA_ARGS: -DUSE_FMODSTUDIO=ON -DUSE_KDU=ON --crashreporting
   build_secrets_checkout: ${{github.workspace}}/signing
   XZ_DEFAULTS: -T0
   FS_RELEASE_TYPE: Unknown
@@ -31,9 +31,9 @@ jobs:
   build_matrix:
     strategy:
       matrix:
-        os: [macos-14,ubuntu-22.04,windows-2022]
-        grid: [sl,os]
-        variant: [regular, avx]
+        os: [macos-14,windows-2022] #[macos-14,ubuntu-22.04,windows-2022]
+        grid: [sl] #[sl,os]
+        variant: [avx] #[regular, avx]
     runs-on: ${{ matrix.os }}
     outputs:
       viewer_channel: ${{ steps.channel.outputs.viewer_channel }}
@@ -104,14 +104,14 @@ jobs:
       #     echo "CXX=g++-10" >> $GITHUB_ENV
 
 
-      - name: Setup rclone and download the folder
-        uses: beqjanus/setup-rclone@main
-        with:
-          rclone_config: ${{ secrets.RCLONE_CONFIG }}
+      #- name: Setup rclone and download the folder
+      #  uses: beqjanus/setup-rclone@main
+      #  with:
+      #    rclone_config: ${{ secrets.RCLONE_CONFIG }}
 
-      - name: Set OS/SL flags
-        run: echo "FS_GRID=-DOPENSIM:BOOL=$([ "${{ matrix.grid }}" == "os" ] && echo "ON" || echo "OFF") -DHAVOK_TPV:BOOL=$([ "${{ matrix.grid }}" == "sl" ] && echo "ON" || echo "OFF")" >> $GITHUB_ENV
-        shell: bash
+      #- name: Set OS/SL flags
+      #  run: echo "FS_GRID=-DOPENSIM:BOOL=$([ "${{ matrix.grid }}" == "os" ] && echo "ON" || echo "OFF") -DHAVOK_TPV:BOOL=$([ "${{ matrix.grid }}" == "sl" ] && echo "ON" || echo "OFF")" >> $GITHUB_ENV
+      #  shell: bash
 
       - name: find channel from Branch name
         id: channel
@@ -141,7 +141,7 @@ jobs:
           echo "Building for channel ${FS_RELEASE_CHAN}"
           viewer_channel=${FS_RELEASE_CHAN}
         shell: bash
-        
+
       - name: Get the code
         uses: actions/checkout@v4
         with:
@@ -153,6 +153,17 @@ jobs:
           repository: FirestormViewer/fs-build-variables
           path: build-variables
 
+      - name: clobber channel and configuration for brad
+        run: |
+          echo "FS_RELEASE_TYPE=BradLinden" >> $GITHUB_ENV
+          echo "FS_RELEASE_CHAN=BradLinden_x64" >> $GITHUB_ENV
+          echo "Building for channel FS_RELEASE_CHAN=BradLinden_x64"
+          echo 'LL_BUILD_WINDOWS_RELEASEFS_BRADLINDEN="$LL_BUILD_WINDOWS_RELEASE"' >> $AUTOBUILD_VARIABLES_FILE
+          echo 'LL_BUILD_DARWIN_RELEASEFS_BRADLINDEN="$LL_BUILD_DARWIN_RELEASE"' >> $AUTOBUILD_VARIABLES_FILE
+          echo 'LL_BUILD_LINUX_RELEASEFS_BRADLINDEN="$LL_BUILD_LINUX_RELEASE"' >> $AUTOBUILD_VARIABLES_FILE
+          echo "Added config ReleaseFS_BradLinden to AUTOBUILD_VARIABLES_FILE $AUTOBUILD_VARIABLES_FILE"
+        shell: bash
+
       - name: Define platform variable(s)
         run: |
           declare -A os_map
@@ -163,12 +174,12 @@ jobs:
           echo "platform=${platform}" >> $GITHUB_ENV
         shell: bash
 
-      - name: rclone the private 3p packages for this platform (both 64 & 32)
-        run: 'rclone copy fs_bundles: --filter "- Alpha/*" --filter "+ *${{ env.fallback_platform }}*bz2" .'
+      #- name: rclone the private 3p packages for this platform (both 64 & 32)
+      #  run: 'rclone copy fs_bundles: --filter "- Alpha/*" --filter "+ *${{ env.fallback_platform }}*bz2" .'
         
-      - name: rclone any extra private 3p packages for Alpha (allows library updates not in the main repo)
-        if: env.FS_RELEASE_TYPE == 'Alpha'
-        run: 'rclone copy fs_bundles:Alpha --include "*${{ env.fallback_platform }}*bz2" .'
+      #- name: rclone any extra private 3p packages for Alpha (allows library updates not in the main repo)
+      #  if: env.FS_RELEASE_TYPE == 'Alpha'
+      #  run: 'rclone copy fs_bundles:Alpha --include "*${{ env.fallback_platform }}*bz2" .'
 
       - name: set VSVER for Windows builds
         if: runner.os == 'Windows'
@@ -177,6 +188,7 @@ jobs:
 
       - name: Install certificate
         if: runner.os == 'macOS'
+        continue-on-error: true
         env:
           FS_CERT: ${{ secrets.FS_CERT }}
           FS_CERT_PASS: ${{ secrets.FS_CERT_PASS }}
@@ -224,6 +236,7 @@ jobs:
         shell: bash
 
       - name: edit installables
+        if: false
         run: |
           path_sep="/"
           if [[ "${{ runner.os }}" == "Windows" ]]; then
@@ -295,16 +308,16 @@ jobs:
         run: echo "EXTRA_ARGS=${{ env.EXTRA_ARGS }} --avx2" >> $GITHUB_ENV
 
       - name: Clean up packages to give more space
-        run: rm *${{ env.fallback_platform }}*bz2
+        run: rm -f *${{ env.fallback_platform }}*bz2
         shell: bash
       - name: Configure
         run: |
-          autobuild configure -c ReleaseFS -A${addrsize} -- --package --chan ${{env.FS_RELEASE_CHAN}} ${{env.EXTRA_ARGS}} ${{env.FS_GRID}}
+          autobuild configure -c ReleaseFS_BradLinden -A${addrsize} -- --package --chan ${{env.FS_RELEASE_CHAN}} ${{env.EXTRA_ARGS}} ${{env.FS_GRID}}
           echo "BUGSPLAT_DB=$BUGSPLAT_DB" >> $GITHUB_ENV
         shell: bash
       - name: build
         id: build
-        run: autobuild build -c ReleaseFS -A${addrsize} --no-configure
+        run: autobuild build -c ReleaseFS_BradLinden -A${addrsize} --no-configure
         shell: bash
       - name: Extract version number
         id: version
@@ -327,6 +340,7 @@ jobs:
       
 
       - name: Post Bugsplat Symbols
+        if: false
         uses: BugSplat-Git/symbol-upload@main
         with:
           clientId: ${{ 
@@ -388,7 +402,7 @@ jobs:
     env:
       FS_BUILD_WEBHOOK_URL:
       FS_RELEASE_FOLDER:
-    if: always()
+    if: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -470,11 +484,11 @@ jobs:
           FS_VERSION_MGR_KEY: ${{ secrets.FS_VERSION_MGR_KEY }}
         run: python ./fsutils/download_list.py ${{steps.download.outputs.download-path}} -w ${{ env.FS_BUILD_WEBHOOK_URL }}
 
-      - name: Setup rclone and download the folder
-        uses: beqjanus/setup-rclone@main
-        with:
-          rclone_config: ${{ secrets.RCLONE_CONFIG }}
+      #- name: Setup rclone and download the folder
+      #  uses: beqjanus/setup-rclone@main
+      #  with:
+      #    rclone_config: ${{ secrets.RCLONE_CONFIG }}
 
-      - name: Copy files to remote host
-        run: rclone copy ${{steps.download.outputs.download-path}}/${{ env.FS_RELEASE_FOLDER }} fs_r2_deploy:viewerdownloads/${{ env.FS_RELEASE_FOLDER }}
+      #- name: Copy files to remote host
+      #  run: rclone copy ${{steps.download.outputs.download-path}}/${{ env.FS_RELEASE_FOLDER }} fs_r2_deploy:viewerdownloads/${{ env.FS_RELEASE_FOLDER }}
 
